@@ -96,6 +96,9 @@
     <ClCompile Include="CppSDK\SDK\Player_char_main_functions.cpp">
       <Filter>Sources Files</Filter>
     </ClCompile>
+    <ClCompile Include="CppSDK\SDK\MG_AI_actor_master_functions.cpp">
+      <Filter>Sources Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="imgui\imconfig.h">

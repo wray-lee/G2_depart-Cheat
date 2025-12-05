@@ -170,8 +170,11 @@ namespace menu
         // FVector Pos = Monster->K2_GetActorLocation();
         // Pos.Z += 130.0f; // 假设怪物头部高度
         // return Pos;
+        return Monster->K2_GetActorLocation();
     }
     FVector GetEnemyWaistPos(AActor* Actor) {
+        if (!Actor)
+            return { 0, 0, 0 };
         auto Monster = static_cast<AMG_AI_actor_master_C*>(Actor);
         if (Monster->CapsuleComponent) {
             float CapsuleHalfHeight = Monster->CapsuleComponent->GetScaledCapsuleHalfHeight();
@@ -179,6 +182,8 @@ namespace menu
 
             return Pos;
         }
+
+        return Monster->K2_GetActorLocation();
     
     }
 
@@ -208,23 +213,23 @@ namespace menu
     }
 
     // 自瞄和魔法子弹
-    void RunAimbot(APlayerController *PC, APlayer_char_main_C *MyChar)
+    void RunAimbot(APlayerController* PC, APlayer_char_main_C* MyChar)
     {
-        AActor *CurrentTarget = nullptr;
-        UWorld *World = UWorld::GetWorld();
+        AActor* CurrentTarget = nullptr;
+        UWorld* World = UWorld::GetWorld();
         if (!World || !World->PersistentLevel)
             return;
 
-        FVector2D ScreenCenter = {ImGui::GetIO().DisplaySize.x / 2.0f, ImGui::GetIO().DisplaySize.y / 2.0f};
-        TArray<AActor *> Actors = World->PersistentLevel->Actors;
+        FVector2D ScreenCenter = { ImGui::GetIO().DisplaySize.x / 2.0f, ImGui::GetIO().DisplaySize.y / 2.0f };
+        TArray<AActor*> Actors = World->PersistentLevel->Actors;
 
-        AActor *BestTarget = nullptr;
+        AActor* BestTarget = nullptr;
         float BestDist = fAimbotFOV; // 初始距离设为FOV范围
 
         // --- 1. 寻找最佳目标 ---
         if (bAimbot || bMagicBullet)
         {
-            for (AActor *Actor : Actors)
+            for (AActor* Actor : Actors)
             {
                 if (!Actor || Actor == MyChar)
                     continue;
@@ -233,7 +238,7 @@ namespace menu
                 if (GetActorType(Actor) != EActorType::Enemy)
                     continue;
 
-                auto Monster = static_cast<AMG_AI_actor_master_C *>(Actor);
+                auto Monster = static_cast<AMG_AI_actor_master_C*>(Actor);
                 if (Monster->is_death || Monster->HP_current <= 0)
                     continue;
 
@@ -270,7 +275,7 @@ namespace menu
                 auto DrawList = ImGui::GetBackgroundDrawList();
 
                 // 1. 画一条线连过去
-                FVector2D ScreenCenter = {ImGui::GetIO().DisplaySize.x / 2.0f, ImGui::GetIO().DisplaySize.y / 2.0f};
+                FVector2D ScreenCenter = { ImGui::GetIO().DisplaySize.x / 2.0f, ImGui::GetIO().DisplaySize.y / 2.0f };
                 DrawList->AddLine(ImVec2(ScreenCenter.X, ScreenCenter.Y), ImVec2(ScreenPos.X, ScreenPos.Y), ImColor(255, 0, 0), 1.0f);
 
                 // 2. 在目标位置画一个红点
@@ -309,34 +314,131 @@ namespace menu
         }
 
         // --- 3. 魔法子弹逻辑 ---
-        if (bMagicBullet)
-        {
-            for (AActor *Actor : Actors)
-            {
-                if (!Actor)
-                    continue;
+        //if (bMagicBullet && CurrentTarget && MyChar && PC)
+        //{
+        //    UWorld* World = UWorld::GetWorld();
+        //    if (!World || !World->PersistentLevel)
+        //        return;
 
-                // [精准判定] 判断是否为子弹类 ABullet_Projectile_C
-                if (Actor->IsA(ABullet_Projectile_C::StaticClass()))
-                {
+        //    TArray<AActor*> Actors = World->PersistentLevel->Actors;
 
-                    // 简单的归属判断：只有距离玩家一定范围内的子弹才处理 (防止吸走别人的子弹)
-                    // 或者检查 Owner: if(Actor->Owner == MyChar)
-                    float DistFromMe = MyChar->GetDistanceTo(Actor);
+        //    FVector TargetPos = GetEnemyWaistPos(CurrentTarget);
+        //    if (TargetPos.X == 0 && TargetPos.Y == 0 && TargetPos.Z == 0)
+        //        return;
 
-                    // 逻辑:
-                    // 1. 距离玩家 > 100 (防止刚生成还没飞出去就瞬移，导致打中自己或判定失效)
-                    // 2. 距离目标 > 100 (防止已经命中了还在不停瞬移)
-                    if (DistFromMe > 50.0f && CurrentTarget->GetDistanceTo(Actor) > 50.0f)
-                    {
+        //    for (AActor* Actor : Actors)
+        //    {
+        //        if (!Actor)
+        //            continue;
 
-                        // 核心：直接把子弹设置到敌人位置
-                        // bSweep=false, bTeleport=true
-                        Actor->K2_SetActorLocation(TargetWaistLoc, false, nullptr, true);
-                    }
-                }
-            }
-        }
+        //        if (!Actor->IsA(ABullet_Projectile_C::StaticClass()))
+        //            continue;
+
+        //        auto Bullet = static_cast<ABullet_Projectile_C*>(Actor);
+        //        if (!Bullet)
+        //            continue;
+
+        //        // 只控制自己发射的子弹
+        //        APawn* InstigatorPawn = static_cast<APawn*>(Bullet->GetInstigator());
+        //        if (InstigatorPawn != MyChar)
+        //            continue;
+
+        //        // 距离检查：太远的不引导，太近的让引擎自己判定命中
+        //        float DistFromMe = MyChar->GetDistanceTo(Bullet);
+        //        float DistToTarget = CurrentTarget->GetDistanceTo(Bullet);
+
+        //        if (DistFromMe > 4000.0f)      // 超过 40m 不管
+        //            continue;
+        //        if (DistToTarget < 50.0f)      // 已经贴身 0.5m 不拉扯
+        //            continue;
+
+        //        FVector BulletLoc = Bullet->K2_GetActorLocation();
+
+        //        // 重新计算方向 + 位置
+        //        FVector ToTarget = TargetPos - BulletLoc;
+        //        float   Dist = ToTarget.Magnitude();
+        //        if (Dist < 100.0f)             // 太近就算了
+        //            continue;
+
+        //        FVector Dir = ToTarget / Dist;
+
+        //        // 传送到目标前方 50cm
+        //        FVector TeleportPos = TargetPos - Dir * 50.0f;
+        //        Bullet->K2_SetActorLocation(TeleportPos, true, nullptr, true);
+
+        //        // 再次基于 TeleportPos 重算方向，保证完全一致
+        //        FVector FinalToTarget = TargetPos - TeleportPos;
+        //        float   FinalDist = FinalToTarget.Magnitude();
+        //        if (FinalDist < 10.0f)
+        //            continue;
+
+        //        FVector FinalDir = FinalToTarget / FinalDist;
+
+        //        // 旋转校正
+        //        FRotator LookRot = UKismetMathLibrary::FindLookAtRotation(TeleportPos, TargetPos);
+        //        Bullet->K2_SetActorRotation(LookRot, false);
+
+        //        // 速度校正
+        //        if (Bullet->Projectile)
+        //        {
+        //            float Speed = Bullet->Projectile->Velocity.Magnitude();
+        //            if (Speed < 1000.0f)
+        //                Speed = 3000.0f;    // 一个你自己游戏里正常的飞行速度
+
+        //            Bullet->Projectile->Velocity = FinalDir * Speed;
+
+        //            if (Bullet->Projectile->UpdatedComponent)
+        //                Bullet->Projectile->UpdatedComponent->ComponentVelocity = Bullet->Projectile->Velocity;
+        //        }
+        //        auto Draw = ImGui::GetBackgroundDrawList();
+        //        FVector2D S1, S2;
+        //        if (PC->ProjectWorldLocationToScreen(TeleportPos, &S1, true) &&
+        //            PC->ProjectWorldLocationToScreen(TargetPos, &S2, true))
+        //        {
+        //            Draw->AddCircleFilled(ImVec2(S1.X, S1.Y), 4, ImColor(0, 255, 0));
+        //            Draw->AddCircleFilled(ImVec2(S2.X, S2.Y), 4, ImColor(255, 0, 0));
+        //            Draw->AddLine(ImVec2(S1.X, S1.Y), ImVec2(S2.X, S2.Y), ImColor(255, 255, 0), 1.5f);
+        //        }
+        //    }
+        //}
+        
+        // 魔法子弹无效，直接造成伤害
+        //if (bMagicBullet && CurrentTarget && (GetAsyncKeyState(VK_LBUTTON) & 0x8000))
+        //{
+        //    // 转换指针
+        //    auto Monster = static_cast<AMG_AI_actor_master_C*>(CurrentTarget);
+
+        //    // 简单的冷却时间检查，防止一帧调用60次导致崩溃或掉线
+        //    static float LastAttackTime = 0.0f;
+        //    float CurrentTime = UGameplayStatics::GetTimeSeconds(UWorld::GetWorld()); // 或者使用 GetTickCount64() / 1000.0f
+
+        //    if (CurrentTime - LastAttackTime > 0.1f) // 0.1秒攻击一次，即每秒10次
+        //    {
+        //        // 方案 A: 标准伤害函数 (推荐)
+        //        // 参数1: 伤害数值 (比如 9999)
+        //        // 参数2: 伤害来源 (MyChar)
+        //        Monster->apply_custom_damage_self(1000.0f, MyChar);
+
+        //        // 方案 B: 如果方案A没反应，尝试 P2P 击杀接口 (这通常是联机用的)
+        //        // Monster->API_kill_enemy_P2P(
+        //        //     10000.0f,            // Damage
+        //        //     nullptr,             // DamageType (可能需要创建一个 UDamageType)
+        //        //     Monster->K2_GetActorLocation(), // HitLocation
+        //        //     FVector(0,0,1),      // HitNormal
+        //        //     nullptr,             // HitComponent
+        //        //     Monster->bone_head,  // BoneName
+        //        //     FVector(1,0,0),      // ShotDirection
+        //        //     MyChar->Controller,  // Instigator
+        //        //     MyChar,              // DamageCauser
+        //        //     FHitResult(),        // HitInfo (空结构体)
+        //        //     true,                // is_Crit
+        //        //     Monster,             // HitActor
+        //        //     0, 0                 // indexs
+        //        // );
+
+        //        LastAttackTime = CurrentTime;
+        //    }
+        //}
     }
 
     void DrawText3D(APlayerController *PC, const FVector &WorldPos, const char *Text, float *ColorFloat)
@@ -649,8 +751,8 @@ namespace menu
                 char Buf[128];
 				// !!!!!!!!--debug--!!!!!!!!!!
                 //std::string ClassName = "Unknown";
-                //ClassName = Monster->Class->GetName();
-                // std::string ObjName = Monster->GetName(); // 获取对象名
+                //ClassName = Monster->Class->GetName().c_str();
+                // std::string ObjName = Monster->GetName().c_str(); // 获取对象名
                 //sprintf_s(Buf, "Class: %s -> %s [%.0fm]\nHP: %d", ClassName, ObjName, Distance, (int)Monster->HP_current);
                 
                 //int ClassID = Monster->Class->Name.ComparisonIndex : -1;
@@ -778,12 +880,101 @@ namespace menu
     //    Draw->AddText(ImVec2(10, 100), ImColor(255, 255, 0), StatBuf);
     //}
 
+    //!!!!!!!--debug magic bullet--!!!!!!!!!!
+    // 独立的子弹调试开关
+    //bool bDebugBullets = true;   // 你可以先默认 true，确定完类名后关掉
+    //
+    //void DebugBulletsStandalone() {
+
+    //    if (bDebugBullets)
+    //    {
+    //        APlayerController* PC = GetPlayerController();
+    //        APlayer_char_main_C* MyChar = GetLocalPlayerChar();
+    //        UWorld* World = UWorld::GetWorld();
+
+    //        if (!PC || !World || !World->PersistentLevel || !MyChar)
+    //            return;
+
+    //        ImDrawList* Draw = ImGui::GetBackgroundDrawList();
+    //        TArray<AActor*> Actors = World->PersistentLevel->Actors;
+
+    //        int BulletLikeCount = 0;
+
+    //        for (int i = 0; i < Actors.Num(); ++i)
+    //        {
+    //            AActor* Actor = Actors[i];
+    //            if (!Actor)
+    //                continue;
+
+    //            float Dist = MyChar->GetDistanceTo(Actor) / 100.0f;
+    //            if (Dist > 80.0f)  // 只看 80m 内的东西，防止刷屏
+    //                continue;
+
+    //            FVector Pos = Actor->K2_GetActorLocation();
+    //            FVector2D sp;
+    //            if (!PC->ProjectWorldLocationToScreen(Pos, &sp, true))
+    //                continue;
+
+    //            std::string Name = Actor->GetName();
+
+    //            // 只筛选名字里可能是子弹的
+    //            if (Name.find("Bullet") == std::string::npos &&
+    //                Name.find("Projectile") == std::string::npos &&
+    //                Name.find("Arrow") == std::string::npos &&
+    //                Name.find("Tracer") == std::string::npos)
+    //                continue;
+
+    //            // 给这类东西画个标记
+    //            Draw->AddCircleFilled(ImVec2(sp.X, sp.Y), 4.0f, ImColor(0, 255, 255, 200));
+
+    //            char buf[160];
+    //            sprintf_s(buf, "%d: %s (%.1fm)", i, Name.c_str(), Dist);
+    //            Draw->AddText(ImVec2(sp.X + 6, sp.Y), ImColor(0, 255, 255), buf);
+
+    //            BulletLikeCount++;
+    //            if (BulletLikeCount >= 12)  // 最多显示 12 个，够你看名字了
+    //                break;
+    //        }
+
+    //        char stat[64];
+    //        sprintf_s(stat, "[DebugBullets] Count = %d", BulletLikeCount);
+    //        Draw->AddText(ImVec2(10, 120), ImColor(255, 255, 0), stat);
+    //    }
+    //}
+    //!!!!!!!--debug--!!!!!!!!!!
+
+    //直接改钱无效，调用API给予
+    AMG_AI_actor_master_C* GetAnyValidMonster()
+    {
+        UWorld* World = UWorld::GetWorld();
+        if (!World || !World->PersistentLevel) return nullptr;
+
+        TArray<AActor*> Actors = World->PersistentLevel->Actors;
+        for (AActor* Actor : Actors)
+        {
+            if (!Actor || !Actor->IsA(AMG_AI_actor_master_C::StaticClass()))
+                continue;
+
+            auto Monster = static_cast<AMG_AI_actor_master_C*>(Actor);
+            // 最好找一个没死的，虽然有些逻辑死了也能调用
+            if (!Monster->is_death && Monster->HP_current > 0)
+            {
+                return Monster;
+            }
+        }
+        return nullptr;
+    }
+
+
+   
+
     void Init()
     {
         ImGuiIO &io = ImGui::GetIO();
         auto MyController = GetPlayerController();
         Loop();
         Esp();
+        //DebugBulletsStandalone();
 
         if (isOpen)
         {
@@ -885,11 +1076,11 @@ namespace menu
                 ImGui::Separator();
 
                 // 魔法子弹部分
-                ImGui::Checkbox("Magic Bullet", &bMagicBullet);
-                if (ImGui::IsItemHovered())
-                {
-                    ImGui::SetTooltip("Teleports bullets to enemy Head instantly.\nWorks best with 'Unlimited Range'.");
-                }
+                //ImGui::Checkbox("Magic Bullet", &bMagicBullet);
+                //if (ImGui::IsItemHovered())
+                //{
+                //    ImGui::SetTooltip("Teleports bullets to enemy Head instantly.\nWorks best with 'Unlimited Range'.");
+                //}
             }
 
             if (ImGui::CollapsingHeader("Resources"))
@@ -927,14 +1118,21 @@ namespace menu
                 if (ImGui::Button("Add 50k Tech"))
                 {
                     auto MyChar = GetLocalPlayerChar();
-                    if (MyChar)
-                    {
-                        // 尝试使用枚举 1 (NewEnumerator0)
-                        MyChar->get_ECO_tech((SDK::EZero9_TECH_get_Enum)2, 50000.0f);
-                        // 双重保险：直接修改变量
-                        MyChar->ECO_tech += 50000.0f;
+                    if (MyChar && MyChar->IsA(SDK::APlayer_BP_Child_C::StaticClass())) {
+                        auto ChildPlayer = reinterpret_cast<SDK::APlayer_BP_Child_C*>(MyChar);
+                        auto Monster = GetAnyValidMonster();
+                        if (Monster && MyChar)
+                        {
+                            // 尝试使用枚举 1 (NewEnumerator0)
+                            //MyChar->get_ECO_tech((SDK::EZero9_TECH_get_Enum)2, 50000.0f);
+                            //// 双重保险：直接修改变量
+                            //MyChar->ECO_tech += 50000.0f;
 
-                        MyChar->UI_update_money(MyChar->ECO_money);
+                            Monster->give_ECO_Tech_to_target(ChildPlayer, (SDK::EZero9_TECH_get_Enum)1, 5000.0f);
+                            Monster->SVR_give_ECO_Tech_to_target(ChildPlayer, (SDK::EZero9_TECH_get_Enum)1, 5000.0f);
+
+                            MyChar->UI_update_money(MyChar->ECO_money);
+                        }
                     }
                 }
 
