@@ -171,6 +171,17 @@ namespace menu
         // Pos.Z += 130.0f; // 假设怪物头部高度
         // return Pos;
     }
+    FVector GetEnemyWaistPos(AActor* Actor) {
+        auto Monster = static_cast<AMG_AI_actor_master_C*>(Actor);
+        if (Monster->CapsuleComponent) {
+            float CapsuleHalfHeight = Monster->CapsuleComponent->GetScaledCapsuleHalfHeight();
+            FVector Pos = Monster->K2_GetActorLocation();
+
+            return Pos;
+        }
+    
+    }
+
     // 实体类型判断
     EActorType GetActorType(AActor *Actor)
     {
@@ -249,6 +260,7 @@ namespace menu
             return;
 
         FVector TargetLoc = GetEnemyHeadPos(CurrentTarget);
+        FVector TargetWaistLoc = GetEnemyWaistPos(CurrentTarget);
         //!!!!!!!!!!!!!!!!!!!!!!!!!!!!!---------------------debug---------------!!!!!!!!!!!!!!!!!!!!!!!!!!!
         if (bAimbot || bMagicBullet)
         {
@@ -315,12 +327,12 @@ namespace menu
                     // 逻辑:
                     // 1. 距离玩家 > 100 (防止刚生成还没飞出去就瞬移，导致打中自己或判定失效)
                     // 2. 距离目标 > 100 (防止已经命中了还在不停瞬移)
-                    if (DistFromMe > 100.0f && CurrentTarget->GetDistanceTo(Actor) > 50.0f)
+                    if (DistFromMe > 50.0f && CurrentTarget->GetDistanceTo(Actor) > 50.0f)
                     {
 
-                        // 核心：直接把子弹设置到敌人头部位置
+                        // 核心：直接把子弹设置到敌人位置
                         // bSweep=false, bTeleport=true
-                        Actor->K2_SetActorLocation(TargetLoc, false, nullptr, true);
+                        Actor->K2_SetActorLocation(TargetWaistLoc, false, nullptr, true);
                     }
                 }
             }
