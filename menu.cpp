@@ -92,15 +92,38 @@ namespace menu
     bool bInfiniteAmmo = false;
     bool bInfiniteMoney = false;
     bool bNoRecoil = false;
+
     bool bAttackSpeed = false;
+    float default_shootint_delay;
+    float default_shooting_delay_current = -1.0f;
+    float default_CW_Fire_Delay = -1.0f;
+    float default_CW_Burst_Delay = -1.0f;
+
+
+
+
     bool bShootRange = false;
+
     bool bSpeedHack = false;
+    float fOrg_SprintSpeed = -1.0f;
+    float fOrg_WalkSpeed = -1.0f;
+    float fMoveSpeedMultiplier = 1.1f;
+
+    bool bHighJump = false;
+    float fOrg_JumpZVelocity = -0.1f;
+    float fJumpMultiplier = 2.0f;
+    bool bMultipleJumpTimes = false;
+    int iJumpTimes = 2147483647;
+
+
     bool bNoclip = false;
     bool bInstantSkill = false;
     bool bExpRate = false;
 
     float fExpRateMultiplier = 2.0f;
-    float fMoveSpeedMultiplier = 2.0f;
+    
+
+
 
     // ESP
     bool bEspEnable = false;                         // ESP 总开关
@@ -127,6 +150,180 @@ namespace menu
     float fAimbotSmooth = 1.0f; // 平滑度 (1.0 = 锁死)
     bool bDrawFOV = true;       // 绘制 FOV 圈
 
+
+    // Debug
+    bool bDebugScanner = false;
+    float fDebugScanDist = 500.0f; // 默认扫描 5米 (UE单位通常是厘米，500 = 5m)
+    bool bShowClassOnly = true;    // 只显示类名(看起来简洁点)
+
+    bool SafeProjectWorldToScreen(APlayerController* PC, FVector WorldLoc, FVector2D* OutScreenPos);
+    void DrawText3D(APlayerController* PC, const FVector& WorldPos, const char* Text, float* ColorFloat);
+    APlayer_char_main_C* GetLocalPlayerChar();
+    APlayerController* GetPlayerController();
+    EActorType GetActorType(AActor* Actor);
+
+
+    // 安全检查函数
+    bool SafeProjectWorldToScreen(APlayerController* PC, FVector WorldLoc, FVector2D* OutScreenPos)
+    {
+        bool bResult = false;
+        __try
+        {
+            // 这里进行最危险的内存访问
+            if (PC && PC->Player)
+            {
+                bResult = PC->ProjectWorldLocationToScreen(WorldLoc, OutScreenPos, true);
+            }
+        }   
+        __except (EXCEPTION_EXECUTE_HANDLER)
+        {
+            // 如果崩溃了，吞掉异常，返回 false
+            bResult = false;
+        }
+        return bResult;
+    }
+    // 绘制函数
+    void DrawText3D(APlayerController* PC, const FVector& WorldPos, const char* Text, float* ColorFloat)
+    {
+        FVector2D ScreenPos;
+        if (PC->ProjectWorldLocationToScreen(WorldPos, &ScreenPos, true))
+        {
+            // 简单防出界
+            auto io = ImGui::GetIO();
+            if (ScreenPos.X > 0 && ScreenPos.Y > 0 && ScreenPos.X < io.DisplaySize.x && ScreenPos.Y < io.DisplaySize.y)
+            {
+                ImColor Color = ImColor(ColorFloat[0], ColorFloat[1], ColorFloat[2], ColorFloat[3]);
+                ImVec2 TextSize = ImGui::CalcTextSize(Text);
+                // 文字居中
+                ImGui::GetBackgroundDrawList()->AddText(
+                    ImVec2(ScreenPos.X - (TextSize.x / 2), ScreenPos.Y),
+                    Color,
+                    Text);
+            }
+        }
+    }
+    // 实体类型判断
+    EActorType GetActorType(AActor* Actor)
+    {
+        if (!Actor)
+            return EActorType::Unknown;
+
+        // 判断是否为玩家
+        if (Actor->IsA(APlayer_char_main_C::StaticClass()))
+        {
+            return EActorType::Player;
+        }
+
+        // 判断是否为怪物 AI
+        if (Actor->IsA(AMG_AI_actor_master_C::StaticClass()))
+        {
+            return EActorType::Enemy;
+        }
+
+        // 判断是否为掉落物
+        if (Actor->IsA(ALT_loot_box_main_C::StaticClass()))
+            return EActorType::Chest;
+
+        return EActorType::Unknown;
+    }
+	// 获取本地玩家控制器和角色
+    APlayerController* GetPlayerController()
+    {
+        UWorld* World = UWorld::GetWorld();
+        if (!World || !World->OwningGameInstance || World->OwningGameInstance->LocalPlayers.Num() <= 0)
+            return nullptr;
+        ULocalPlayer* LocalPlayer = World->OwningGameInstance->LocalPlayers[0];
+        if (!LocalPlayer || !LocalPlayer->PlayerController)
+            return nullptr;
+
+        return static_cast<APlayerController*>(LocalPlayer->PlayerController);
+    }
+    APlayer_char_main_C* GetLocalPlayerChar()
+    {
+        APlayerController* MyController = GetPlayerController();
+
+        if (MyController != nullptr)
+        {
+            return static_cast<APlayer_char_main_C*>(MyController->Pawn);
+        }
+
+        return nullptr;
+    }
+
+    void RunDebugScanner(APlayerController* PC, AActor* MyChar)
+    {
+        if (!bDebugScanner) return;
+
+        UWorld* World = UWorld::GetWorld();
+        if (!World || !World->PersistentLevel) return;
+
+        // 获取当前关卡所有 Actor
+        TArray<AActor*> Actors = World->PersistentLevel->Actors;
+
+        // 获取屏幕中心，防止后续计算用到
+        auto io = ImGui::GetIO();
+        FVector2D ScreenCenter = { io.DisplaySize.x / 2.0f, io.DisplaySize.y / 2.0f };
+
+        for (int i = 0; i < Actors.Num(); i++)
+        {
+            AActor* Actor = Actors[i];
+
+            // 1. 基础过滤
+            if (!Actor || Actor == MyChar) continue;
+
+            // 2. 距离过滤 (优化性能的关键)
+            // 简单的距离计算，避免开根号带来的性能损耗，用距离平方判断也行，这里为了直观用 GetDistanceTo
+            float Dist = MyChar->GetDistanceTo(Actor);
+            if (Dist > fDebugScanDist) continue;
+
+            // 3. 获取位置
+            FVector Pos = Actor->K2_GetActorLocation();
+            FVector2D ScreenPos;
+
+            // 4. 安全的坐标转换 (加上之前的 SEH 保护)
+
+            if (SafeProjectWorldToScreen(PC, Pos, &ScreenPos))
+            {
+                // 5. 获取名字 (核心)
+                std::string ClassName = "NullClass";
+                std::string ObjName = "NullObj";
+
+                if (Actor->Class) {
+                    // 获取类名，例如 "BP_Goblin_Warrior_C"
+                    // 你的 SDK 可能叫 GetName() 或者 GetFullName()
+                    // 如果是 Dumper-7 生成的 SDK，通常用 Actor->Class->GetName()
+                    ClassName = Actor->Class->GetName();
+                }
+
+                // 获取对象名，例如 "BP_Goblin_Warrior_C_24"
+                ObjName = Actor->GetName();
+
+                // 6. 过滤掉不需要的垃圾 (可选)
+                // 场景里会有很多莫名其妙的东西，比如 "Brush", "Info", "Volume"，可以过滤掉让视野干净点
+                if (ClassName.find("Brush") != std::string::npos ||
+                    ClassName.find("Volume") != std::string::npos ||
+                    ClassName.find("Info") != std::string::npos)
+                    continue;
+
+                // 7. 拼接显示文本
+                char Buf[256];
+                if (bShowClassOnly) {
+                    sprintf_s(Buf, "[%s]\ndist: %.1fm", ClassName.c_str(), Dist / 100.0f);
+                }
+                else {
+                    sprintf_s(Buf, "Class: %s\nObj: %s\ndist: %.1fm", ClassName.c_str(), ObjName.c_str(), Dist / 100.0f);
+                }
+
+                // 8. 绘制 (用青色，比较显眼)
+                float col_Debug[4] = { 0.0f, 1.0f, 1.0f, 1.0f };
+                DrawText3D(PC, Pos, Buf, col_Debug);
+
+                // 在物体位置画个小圈
+                ImGui::GetBackgroundDrawList()->AddCircle(ImVec2(ScreenPos.X, ScreenPos.Y), 3.0f, ImColor(0, 255, 255));
+            }
+        }
+    }
+
     // 获取敌人头部位置的函数
     FVector GetEnemyHeadPos(AActor *Actor)
     {
@@ -135,16 +332,21 @@ namespace menu
 
         auto Monster = static_cast<AMG_AI_actor_master_C *>(Actor);
 
+        if (Monster->is_death || Monster->HP_current <= 0.0f) {
+            // 怪物死了就返回脚底板坐标或者直接返回0，防止崩溃
+            return Monster->K2_GetActorLocation();
+        }
+
         // 使用 bone_head (需要 ACharacter 的 Mesh 有效)
         // Monster->bone_head 存储了头部骨骼的名字
-        if (Monster->Mesh && Monster->bone_head.ComparisonIndex!=0) {
+        if ((!Monster->is_death || Monster->HP_current <= 0.0f) && Monster->Mesh && Monster->bone_head.ComparisonIndex!=0) {
             return Monster->Mesh->GetSocketLocation(Monster->bone_head);
         }
 
         // 动态胶囊体高度
         //  不要用写死的 130.0f，改用胶囊体的一半高度 * 缩放
         //ACharacter 都有 CapsuleComponent
-         if (Monster->CapsuleComponent) {
+         if ((!Monster->is_death || Monster->HP_current <= 0.0f) && Monster->CapsuleComponent) {
              float CapsuleHalfHeight = Monster->CapsuleComponent->GetScaledCapsuleHalfHeight();
              FVector Pos = Monster->K2_GetActorLocation();
 
@@ -157,7 +359,7 @@ namespace menu
 
         // 使用 see_Scene 组件
         // SDK 显示偏移 0x04E0 有一个 see_Scene，通常用于AI视野检测，位于头部/眼睛
-        if (Monster->see_Scene)
+        if ((!Monster->is_death || Monster->HP_current <= 0.0f) && Monster->see_Scene)
         {
             return Monster->see_Scene->K2_GetComponentLocation();
         }
@@ -187,30 +389,6 @@ namespace menu
     
     }
 
-    // 实体类型判断
-    EActorType GetActorType(AActor *Actor)
-    {
-        if (!Actor)
-            return EActorType::Unknown;
-
-        // 判断是否为玩家
-        if (Actor->IsA(APlayer_char_main_C::StaticClass()))
-        {
-            return EActorType::Player;
-        }
-
-        // 判断是否为怪物 AI
-        if (Actor->IsA(AMG_AI_actor_master_C::StaticClass()))
-        {
-            return EActorType::Enemy;
-        }
-
-        // 判断是否为掉落物
-        if (Actor->IsA(ALT_loot_box_main_C::StaticClass()))
-            return EActorType::Chest;
-
-        return EActorType::Unknown;
-    }
 
     // 自瞄和魔法子弹
     void RunAimbot(APlayerController* PC, APlayer_char_main_C* MyChar)
@@ -245,8 +423,13 @@ namespace menu
                 // 获取头部位置
                 FVector HeadPos = GetEnemyHeadPos(Actor);
                 FVector2D ScreenPos;
+                // 空指针安全检查
+                if (!PC) return;
+                if (!PC->Player) return;
+                if (!PC->PlayerCameraManager) return;
 
                 // 转换并判断是否在 FOV 内
+
                 if (PC->ProjectWorldLocationToScreen(HeadPos, &ScreenPos, true))
                 {
                     float Dist = Math::GetDistance2D(ScreenCenter, ScreenPos);
@@ -270,7 +453,12 @@ namespace menu
         if (bAimbot || bMagicBullet)
         {
             FVector2D ScreenPos;
-            if (PC->ProjectWorldLocationToScreen(TargetLoc, &ScreenPos, true))
+            // 安全检查，避免绘制空指针
+            if (!PC) return;
+            if (!PC->Player) return;
+            if (!PC->PlayerCameraManager) return;
+
+            if (SafeProjectWorldToScreen(PC, TargetLoc, &ScreenPos))
             {
                 auto DrawList = ImGui::GetBackgroundDrawList();
 
@@ -310,7 +498,13 @@ namespace menu
             // float DeltaTime = UWorld::GetWorld()->GetDeltaSeconds();
             // float InterpSpeed = fAimbotSmooth * 100.0f; // 转换一下速度感
             // FinalRot = UKismetMathLibrary::RInterpTo(CurrentRot, TargetRot, DeltaTime, InterpSpeed);
-            PC->SetControlRotation(FinalRot);
+
+            //PC->SetControlRotation(FinalRot);
+            // 修复偶尔的崩溃，越过SetControlRotation检查
+            if (FinalRot.Pitch != FinalRot.Pitch || FinalRot.Yaw != FinalRot.Yaw || FinalRot.Roll != FinalRot.Roll)
+                return;
+
+            PC->ControlRotation = FinalRot;
         }
 
         // --- 3. 魔法子弹逻辑 ---
@@ -441,66 +635,29 @@ namespace menu
         //}
     }
 
-    void DrawText3D(APlayerController *PC, const FVector &WorldPos, const char *Text, float *ColorFloat)
-    {
-        FVector2D ScreenPos;
-        if (PC->ProjectWorldLocationToScreen(WorldPos, &ScreenPos, true))
-        {
-            // 简单防出界
-            auto io = ImGui::GetIO();
-            if (ScreenPos.X > 0 && ScreenPos.Y > 0 && ScreenPos.X < io.DisplaySize.x && ScreenPos.Y < io.DisplaySize.y)
-            {
-                ImColor Color = ImColor(ColorFloat[0], ColorFloat[1], ColorFloat[2], ColorFloat[3]);
-                ImVec2 TextSize = ImGui::CalcTextSize(Text);
-                // 文字居中
-                ImGui::GetBackgroundDrawList()->AddText(
-                    ImVec2(ScreenPos.X - (TextSize.x / 2), ScreenPos.Y),
-                    Color,
-                    Text);
-            }
-        }
-    }
 
-    APlayerController *GetPlayerController()
-    {
-        UWorld *World = UWorld::GetWorld();
-        if (!World || !World->OwningGameInstance || World->OwningGameInstance->LocalPlayers.Num() <= 0)
-            return nullptr;
-        ULocalPlayer *LocalPlayer = World->OwningGameInstance->LocalPlayers[0];
-        if (!LocalPlayer || !LocalPlayer->PlayerController)
-            return nullptr;
 
-        return static_cast<APlayerController *>(LocalPlayer->PlayerController);
-    }
-    APlayer_char_main_C *GetLocalPlayerChar()
-    {
-        APlayerController *MyController = GetPlayerController();
-
-        if (MyController != nullptr)
-        {
-            return static_cast<APlayer_char_main_C *>(MyController->Pawn);
-        }
-
-        return nullptr;
-    }
 
     void Loop()
     {
+
         auto MyController = GetPlayerController();
+        if (!MyController) return;
         auto MyChar = GetLocalPlayerChar();
-        //
+        if (!MyChar) return;
+        auto DefaultChar = APlayer_char_main_C::GetDefaultObj();
+		if (!DefaultChar) return;
+        
         RunAimbot(MyController, MyChar);
 
-        if (!MyChar)
-            return;
 
         // [无敌模式] (保持之前的状态位修改，这对联机最有效)
         if (bGodMode)
         {
             if (MyChar->HP_current < MyChar->HP_max)
-                MyChar->HP_current = MyChar->HP_max;
+                MyChar->HP_current = MyChar->HP_max * 100.0f;
             if (MyChar->shield_current < MyChar->shield_max)
-                MyChar->shield_current = MyChar->shield_max;
+                MyChar->shield_current = MyChar->shield_max * 100.0f;
             MyChar->Is_down_ = false;
             MyChar->Is_death_ = false;
             MyChar->resistence_god_mode = true;
@@ -660,16 +817,77 @@ namespace menu
 
         if (bSpeedHack)
         {
-            auto DefaultChar = APlayer_char_main_C::GetDefaultObj();
-            float base = 600.0f;
-            float walk = 300.0f;
+            if (DefaultChar->CharacterMovement) 
+            {
+                fOrg_SprintSpeed = DefaultChar->move_speed_sprint;
+                fOrg_WalkSpeed = DefaultChar->move_speed_walk;
+            }
+            
+            if (MyChar->CharacterMovement && (fOrg_SprintSpeed <= 0.0f || fOrg_WalkSpeed <= 0.0f))
+            {
+                fOrg_SprintSpeed = MyChar->move_speed_sprint;
+                fOrg_WalkSpeed = MyChar->move_speed_walk;
+            }
 
-            base = DefaultChar->move_speed_sprint;
-            walk = DefaultChar->move_speed_walk;
 
-            float safeMultiplier = fMoveSpeedMultiplier > 3.0f ? 3.0f : fMoveSpeedMultiplier;
-            MyChar->move_speed_sprint = base * safeMultiplier;
-            MyChar->move_speed_walk = walk * safeMultiplier;
+            MyChar->CharacterMovement->MaxWalkSpeed *= fMoveSpeedMultiplier;
+            MyChar->CharacterMovement->MaxWalkSpeedCrouched *= fMoveSpeedMultiplier;
+            MyChar->move_speed_sprint = DefaultChar->move_speed_sprint * fMoveSpeedMultiplier;
+            MyChar->move_speed_walk = DefaultChar->move_speed_walk * fMoveSpeedMultiplier;
+        }
+        else 
+        {
+            // [第三步] 还原：如果存有备份数据，说明刚才开过挂，现在需要还原
+            if (fOrg_SprintSpeed > 0.0f)
+            {
+                if (MyChar->CharacterMovement) {
+                    MyChar->CharacterMovement->MaxWalkSpeed = fOrg_SprintSpeed;
+                }
+
+                MyChar->move_speed_sprint = fOrg_SprintSpeed;
+                MyChar->move_speed_walk = fOrg_WalkSpeed;
+
+                // [第四步] 重置：将备份标记设回 -1，等待下次开启时重新备份
+                fOrg_SprintSpeed = -1.0f;
+                fOrg_WalkSpeed = -1.0f;
+			}
+		}
+        if (bMultipleJumpTimes) 
+        {
+            MyChar->JumpMaxCount = iJumpTimes;
+        }
+        else 
+        {
+            MyChar->JumpMaxCount = 1;
+        }
+
+        if (bHighJump)
+        {
+            if (fOrg_JumpZVelocity < 0.0f)
+            {
+                // 尝试从默认对象获取，如果默认是0则从当前对象获取
+                if (DefaultChar->CharacterMovement)
+                    fOrg_JumpZVelocity = DefaultChar->CharacterMovement->JumpZVelocity;
+
+                // 双重保险：如果默认值为0（某些游戏可能是动态初始化的），就取当前的
+                if (fOrg_JumpZVelocity <= 0.0f)
+                    fOrg_JumpZVelocity = MyChar->CharacterMovement->JumpZVelocity;
+            }
+            MyChar->CharacterMovement->JumpZVelocity = fOrg_JumpZVelocity * fJumpMultiplier;
+        }
+        else
+        {
+            // 还原逻辑
+            // 只有当有备份数据时才执行还原，避免每帧重复赋值
+            if (fOrg_JumpZVelocity > 0.0f)
+            {
+                if (MyChar->CharacterMovement)
+                {
+                    MyChar->CharacterMovement->JumpZVelocity = fOrg_JumpZVelocity;
+                }
+                // 重置备份标志，等待下次开启
+                fOrg_JumpZVelocity = -1.0f;
+            }
         }
 
         if (bExpRate)
@@ -974,6 +1192,7 @@ namespace menu
         auto MyController = GetPlayerController();
         Loop();
         Esp();
+        RunDebugScanner(GetPlayerController(), GetLocalPlayerChar());
         //DebugBulletsStandalone();
 
         if (isOpen)
@@ -1011,147 +1230,179 @@ namespace menu
 
         if (ImGui::Begin("Wray-lee's G2_depart cheat", &isOpen, flags))
         {
-            if (ImGui::CollapsingHeader("Player Features", ImGuiTreeNodeFlags_DefaultOpen))
+            if (ImGui::BeginTabBar("idTab")) 
             {
-                ImGui::Checkbox("God Mode", &bGodMode);
-                ImGui::Checkbox("Unlimited Stamina", &bUStamina);
-                ImGui::Checkbox("Infinite Ammo", &bInfiniteAmmo);
-                ImGui::Checkbox("No Recoil", &bNoRecoil);
-                ImGui::Checkbox("Shooting Speed", &bAttackSpeed);
-                ImGui::Checkbox("Unlimited Range", &bShootRange);
-                ImGui::Checkbox("Instant Skill", &bInstantSkill);
-                ImGui::Spacing();
-                // ImGui::Checkbox("Noclip", &bNoclip);
-                ImGui::Checkbox("EXP Rate Hack", &bExpRate);
-                if (bExpRate)
-                    ImGui::SliderFloat("MultiplierExp", &fExpRateMultiplier, 1.0f, 100.0f, "%.1fx");
-                ImGui::Checkbox("Speed Hack", &bSpeedHack);
-                if (bSpeedHack)
-                    ImGui::SliderFloat("MultiplierSpeed", &fMoveSpeedMultiplier, 1.0f, 100.0f, "%.1fx");
-            }
-            // --- [ESP Visuals] --- (新增部分)
-            if (ImGui::CollapsingHeader("ESP Visuals", ImGuiTreeNodeFlags_DefaultOpen))
-            {
-                // 自动开启两种esp
-                if (ImGui::Checkbox("Enable ESP", &bEspEnable))
+                if (ImGui::BeginTabItem("Cheat"))
                 {
-                    bEspPlayer = true;
-                    bEspMonster = true;
-                }
-
-                if (bEspEnable)
-                {
-                    ImGui::Indent(); // 缩进
-
-                    // 1. 玩家 ESP + 颜色选择
-                    ImGui::Checkbox("Show Players", &bEspPlayer);
-                    ImGui::SameLine();
-                    // ColorEdit4 显示颜色框，参数: 标签, float数组, 标志位
-                    ImGui::ColorEdit4("##ColPly", col_Player, ImGuiColorEditFlags_NoInputs | ImGuiColorEditFlags_AlphaPreview);
-
-                    // 2. 怪物 ESP + 颜色选择
-                    ImGui::Checkbox("Show Monsters", &bEspMonster);
-                    ImGui::SameLine();
-                    ImGui::ColorEdit4("##ColMon", col_Monster, ImGuiColorEditFlags_NoInputs | ImGuiColorEditFlags_AlphaPreview);
-
-                    // 3. 物品 ESP + 颜色选择
-                    ImGui::Checkbox("Show Loot/Box", &bEspLT);
-                    ImGui::SameLine();
-                    ImGui::ColorEdit4("##ColLoot", col_Loot, ImGuiColorEditFlags_NoInputs | ImGuiColorEditFlags_AlphaPreview);
-
-                    ImGui::Unindent(); // 取消缩进
-                }
-            }
-            if (ImGui::CollapsingHeader("Combat (Aimbot/Magic)", ImGuiTreeNodeFlags_DefaultOpen))
-            {
-                // 自瞄部分
-                ImGui::Checkbox("Aimbot (Right Mouse)", &bAimbot);
-                if (bAimbot)
-                {
-                    ImGui::SliderFloat("FOV Radius", &fAimbotFOV, 50.0f, 1000.0f);
-                    ImGui::SliderFloat("Smoothness", &fAimbotSmooth, 0.05f, 1.0f); // 越小越滑，1.0直接锁
-                    ImGui::Checkbox("Draw FOV", &bDrawFOV);
-                }
-
-                ImGui::Separator();
-
-                // 魔法子弹部分
-                //ImGui::Checkbox("Magic Bullet", &bMagicBullet);
-                //if (ImGui::IsItemHovered())
-                //{
-                //    ImGui::SetTooltip("Teleports bullets to enemy Head instantly.\nWorks best with 'Unlimited Range'.");
-                //}
-            }
-
-            if (ImGui::CollapsingHeader("Resources"))
-            {
-                if (ImGui::Button("Add 10000 EXP"))
-                {
-                    auto MyChar = GetLocalPlayerChar();
-                    if (MyChar)
+                    if (ImGui::CollapsingHeader("Player Features", ImGuiTreeNodeFlags_DefaultOpen))
                     {
-                        MyChar->Get_EXP(10000.0f);
-                        MyChar->API_MP_EXP_get(10000.0f);
+                        ImGui::Checkbox("God Mode", &bGodMode);
+                        ImGui::Checkbox("Unlimited Stamina", &bUStamina);
+                        ImGui::Checkbox("Infinite Ammo", &bInfiniteAmmo);
+                        ImGui::Checkbox("No Recoil", &bNoRecoil);
+                        ImGui::Checkbox("Shooting Speed", &bAttackSpeed);
+                        ImGui::Checkbox("Unlimited Range", &bShootRange);
+                        ImGui::Checkbox("Instant Skill", &bInstantSkill);
+                        ImGui::Spacing();
+                        // ImGui::Checkbox("Noclip", &bNoclip);
+                        ImGui::Checkbox("EXP Rate Hack", &bExpRate);
+                        if (bExpRate)
+                            ImGui::SliderFloat("MultiplierExp", &fExpRateMultiplier, 1.0f, 10.0f, "%.1fx");
+                        ImGui::Checkbox("High Jump ", &bHighJump);
+                        if (bHighJump)
+                            ImGui::SliderFloat("MultiplierJump", &fJumpMultiplier, 1.0f, 3.0f, "%.1fx");
+                        ImGui::Checkbox("Unlimited Jump Times", &bMultipleJumpTimes);
+                        ImGui::Checkbox("Speed Hack", &bSpeedHack);
+                        if (bSpeedHack)
+                            ImGui::SliderFloat("MultiplierSpeed", &fMoveSpeedMultiplier, 1.0f, 3.0f, "%.1fx");
                     }
-                }
-                ImGui::Checkbox("Lock Money/Res (999k)", &bInfiniteMoney);
-
-                // [金钱修改按钮]
-                if (ImGui::Button("Add 50k Money"))
-                {
-                    auto MyChar = GetLocalPlayerChar();
-                    if (MyChar)
+                    // --- [ESP Visuals] --- (新增部分)
+                    if (ImGui::CollapsingHeader("ESP Visuals", ImGuiTreeNodeFlags_DefaultOpen))
                     {
-                        // 方法 A: 直接修改变量 (最稳)
-                        MyChar->ECO_money += 50000.0f;
-
-                        // 方法 B: 调用函数 (可能失败)
-                        MyChar->get_ECO_money(50000.0f);
-
-                        MyChar->UI_update_money(MyChar->ECO_money);
-                    }
-                }
-                ImGui::SameLine();
-                ImGui::TextDisabled("(Try buying something to update UI)");
-
-                // [Tech 修改按钮]
-                if (ImGui::Button("Add 50k Tech"))
-                {
-                    auto MyChar = GetLocalPlayerChar();
-                    if (MyChar && MyChar->IsA(SDK::APlayer_BP_Child_C::StaticClass())) {
-                        auto ChildPlayer = reinterpret_cast<SDK::APlayer_BP_Child_C*>(MyChar);
-                        auto Monster = GetAnyValidMonster();
-                        if (Monster && MyChar)
+                        // 自动开启两种esp
+                        if (ImGui::Checkbox("Enable ESP", &bEspEnable))
                         {
-                            // 尝试使用枚举 1 (NewEnumerator0)
-                            //MyChar->get_ECO_tech((SDK::EZero9_TECH_get_Enum)2, 50000.0f);
-                            //// 双重保险：直接修改变量
-                            //MyChar->ECO_tech += 50000.0f;
+                            bEspPlayer = true;
+                            bEspMonster = true;
+                        }
 
-                            Monster->give_ECO_Tech_to_target(ChildPlayer, (SDK::EZero9_TECH_get_Enum)1, 5000.0f);
-                            Monster->SVR_give_ECO_Tech_to_target(ChildPlayer, (SDK::EZero9_TECH_get_Enum)1, 5000.0f);
+                        if (bEspEnable)
+                        {
+                            ImGui::Indent(); // 缩进
 
-                            MyChar->UI_update_money(MyChar->ECO_money);
+                            // 1. 玩家 ESP + 颜色选择
+                            ImGui::Checkbox("Show Players", &bEspPlayer);
+                            ImGui::SameLine();
+                            // ColorEdit4 显示颜色框，参数: 标签, float数组, 标志位
+                            ImGui::ColorEdit4("##ColPly", col_Player, ImGuiColorEditFlags_NoInputs | ImGuiColorEditFlags_AlphaPreview);
+
+                            // 2. 怪物 ESP + 颜色选择
+                            ImGui::Checkbox("Show Monsters", &bEspMonster);
+                            ImGui::SameLine();
+                            ImGui::ColorEdit4("##ColMon", col_Monster, ImGuiColorEditFlags_NoInputs | ImGuiColorEditFlags_AlphaPreview);
+
+                            // 3. 物品 ESP + 颜色选择
+                            ImGui::Checkbox("Show Loot/Box", &bEspLT);
+                            ImGui::SameLine();
+                            ImGui::ColorEdit4("##ColLoot", col_Loot, ImGuiColorEditFlags_NoInputs | ImGuiColorEditFlags_AlphaPreview);
+
+                            ImGui::Unindent(); // 取消缩进
                         }
                     }
-                }
-
-                // [Bullet Res 修改按钮]
-                if (ImGui::Button("Add 50k Res"))
-                {
-                    auto MyChar = GetLocalPlayerChar();
-                    if (MyChar)
+                    if (ImGui::CollapsingHeader("Combat (Aimbot/Magic)", ImGuiTreeNodeFlags_DefaultOpen))
                     {
-                        // 尝试使用枚举 0
-                        MyChar->get_ECO_bullet((SDK::EZero9_bullet_get_Enum)1, 50000.0f);
-                        // 双重保险
-                        MyChar->ECO_bullet += 50000.0f;
+                        // 自瞄部分
+                        ImGui::Checkbox("Aimbot (Right Mouse)", &bAimbot);
+                        if (bAimbot)
+                        {
+                            ImGui::SliderFloat("FOV Radius", &fAimbotFOV, 50.0f, 1000.0f);
+                            ImGui::SliderFloat("Smoothness", &fAimbotSmooth, 0.05f, 1.0f); // 越小越滑，1.0直接锁
+                            ImGui::Checkbox("Draw FOV", &bDrawFOV);
+                        }
 
-                        MyChar->UI_update_money(MyChar->ECO_money);
+                        ImGui::Separator();
+
+                        // 魔法子弹部分
+                        //ImGui::Checkbox("Magic Bullet", &bMagicBullet);
+                        //if (ImGui::IsItemHovered())
+                        //{
+                        //    ImGui::SetTooltip("Teleports bullets to enemy Head instantly.\nWorks best with 'Unlimited Range'.");
+                        //}
                     }
+
+                    if (ImGui::CollapsingHeader("Resources"))
+                    {
+                        if (ImGui::Button("Add 10000 EXP"))
+                        {
+                            auto MyChar = GetLocalPlayerChar();
+                            if (MyChar)
+                            {
+                                MyChar->Get_EXP(10000.0f);
+                                MyChar->API_MP_EXP_get(10000.0f);
+                            }
+                        }
+                        ImGui::Checkbox("Lock Money/Res (999k)", &bInfiniteMoney);
+
+                        // [金钱修改按钮]
+                        if (ImGui::Button("Add 50k Money"))
+                        {
+                            auto MyChar = GetLocalPlayerChar();
+                            if (MyChar)
+                            {
+                                // 方法 A: 直接修改变量 (最稳)
+                                MyChar->ECO_money += 50000.0f;
+
+                                // 方法 B: 调用函数 (可能失败)
+                                MyChar->get_ECO_money(50000.0f);
+
+                                MyChar->UI_update_money(MyChar->ECO_money);
+                            }
+                        }
+                        ImGui::SameLine();
+                        ImGui::TextDisabled("(Try buying something to update UI)");
+
+                        // [Tech 修改按钮]
+                        if (ImGui::Button("Add 50k Tech"))
+                        {
+                            auto MyChar = GetLocalPlayerChar();
+                            if (MyChar && MyChar->IsA(SDK::APlayer_BP_Child_C::StaticClass())) {
+                                auto ChildPlayer = reinterpret_cast<SDK::APlayer_BP_Child_C*>(MyChar);
+                                auto Monster = GetAnyValidMonster();
+                                if (Monster && MyChar)
+                                {
+                                    // 尝试使用枚举 1 (NewEnumerator0)
+                                    //MyChar->get_ECO_tech((SDK::EZero9_TECH_get_Enum)2, 50000.0f);
+                                    //// 双重保险：直接修改变量
+                                    //MyChar->ECO_tech += 50000.0f;
+
+                                    Monster->give_ECO_Tech_to_target(ChildPlayer, (SDK::EZero9_TECH_get_Enum)1, 5000.0f);
+                                    Monster->SVR_give_ECO_Tech_to_target(ChildPlayer, (SDK::EZero9_TECH_get_Enum)1, 5000.0f);
+
+                                    MyChar->UI_update_money(MyChar->ECO_money);
+                                }
+                            }
+                        }
+
+                        // [Bullet Res 修改按钮]
+                        if (ImGui::Button("Add 50k Res"))
+                        {
+                            auto MyChar = GetLocalPlayerChar();
+                            if (MyChar)
+                            {
+                                // 尝试使用枚举 0
+                                MyChar->get_ECO_bullet((SDK::EZero9_bullet_get_Enum)1, 50000.0f);
+                                // 双重保险
+                                MyChar->ECO_bullet += 50000.0f;
+
+                                MyChar->UI_update_money(MyChar->ECO_money);
+                            }
+                        }
+                    }
+                    ImGui::EndTabItem();
                 }
+                
+
+				// Debug Tab
+                if (ImGui::BeginTabItem("Debug"))
+                {
+                    if (ImGui::CollapsingHeader("Debug Functions", ImGuiTreeNodeFlags_DefaultOpen))
+                    {
+                        ImGui::Checkbox("World Scanner (Show Names)", &bDebugScanner);
+                        if (bDebugScanner) 
+                        {
+                            ImGui::SliderFloat("Scan Distance", &fDebugScanDist, 100.0f, 5000.0f, "%.0f");
+
+                            ImGui::Checkbox("Show Class Name Only", &bShowClassOnly);
+                            ImGui::TextDisabled("Walk close to an object to see its Class Name.");
+                            ImGui::TextDisabled("Use this Class Name in your code to filter ESP/Aimbot.");
+                        
+                        }
+                    }
+                    ImGui::EndTabItem();
+                }
+                ImGui::EndTabBar();
             }
-            ImGui::End();
         }
+        ImGui::End();
     }
 }
