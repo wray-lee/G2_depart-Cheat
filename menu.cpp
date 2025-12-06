@@ -1312,7 +1312,7 @@ namespace menu
 							// 4. Fumo ESP + 颜色选择
                             ImGui::Checkbox("Show Fumo", &bEspFumo);
                             ImGui::SameLine();
-                            ImGui::ColorEdit4("##ColLoot", col_Fumo, ImGuiColorEditFlags_NoInputs | ImGuiColorEditFlags_AlphaPreview);
+                            ImGui::ColorEdit4("##ColFumo", col_Fumo, ImGuiColorEditFlags_NoInputs | ImGuiColorEditFlags_AlphaPreview);
 
                             ImGui::Unindent(); // 取消缩进
                         }
