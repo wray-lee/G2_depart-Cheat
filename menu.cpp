@@ -1225,8 +1225,7 @@ namespace menu
             io.ConfigFlags &= ~ImGuiConfigFlags_NoMouseCursorChange;
             if (MyController)
                 MyController->bShowMouseCursor = false;
-            while (ShowCursor(TRUE) < 0)
-                ;
+            while (ShowCursor(TRUE) < 0);
         }
         else
         {
@@ -1287,6 +1286,7 @@ namespace menu
                         {
                             bEspPlayer = true;
                             bEspMonster = true;
+							bEspFumo = true;
                         }
 
                         if (bEspEnable)
