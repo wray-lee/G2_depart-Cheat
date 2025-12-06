@@ -339,56 +339,62 @@ namespace menu
 
         auto Monster = static_cast<AMG_AI_actor_master_C *>(Actor);
 
-        if (Monster->is_death || Monster->HP_current <= 0.0f) {
-            // 怪物死了就返回脚底板坐标或者直接返回0，防止崩溃
-            return Monster->K2_GetActorLocation();
-        }
-
-        // 使用 bone_head (需要 ACharacter 的 Mesh 有效)
-        // Monster->bone_head 存储了头部骨骼的名字
-        if ((!Monster->is_death || Monster->HP_current <= 0.0f) && Monster->Mesh && Monster->bone_head.ComparisonIndex!=0) {
-            return Monster->Mesh->GetSocketLocation(Monster->bone_head);
-        }
-
-        // 动态胶囊体高度
-        //  不要用写死的 130.0f，改用胶囊体的一半高度 * 缩放
-        //ACharacter 都有 CapsuleComponent
-         if ((!Monster->is_death || Monster->HP_current <= 0.0f) && Monster->CapsuleComponent) {
-             float CapsuleHalfHeight = Monster->CapsuleComponent->GetScaledCapsuleHalfHeight();
-             FVector Pos = Monster->K2_GetActorLocation();
-
-            // 胶囊体中心在腰部，所以 Z + HalfHeight 大概就是头顶
-            // 稍微减一点(比如 * 0.8) 也就是瞄眉毛的位置，防止射飞
-            Pos.Z += (CapsuleHalfHeight * 0.8f);
-            return Pos;
-         }
-
-
-        // 使用 see_Scene 组件
-        // SDK 显示偏移 0x04E0 有一个 see_Scene，通常用于AI视野检测，位于头部/眼睛
-        if ((!Monster->is_death || Monster->HP_current <= 0.0f) && Monster->see_Scene)
+        __try
         {
-            return Monster->see_Scene->K2_GetComponentLocation();
+            if (Monster->is_death || Monster->HP_current <= 0.0f) {
+                // 怪物死了就返回脚底板坐标或者直接返回0，防止崩溃
+                return Monster->K2_GetActorLocation();
+            }
+
+            // 使用 bone_head (需要 ACharacter 的 Mesh 有效)
+            // Monster->bone_head 存储了头部骨骼的名字
+            if ((Monster->is_death || Monster->HP_current <= 0.0f) && Monster->Mesh && Monster->bone_head.ComparisonIndex != 0) {
+                return Monster->Mesh->GetSocketLocation(Monster->bone_head);
+            }
+
+            // 动态胶囊体高度
+            //  不要用写死的 130.0f，改用胶囊体的一半高度 * 缩放
+            //ACharacter 都有 CapsuleComponent
+            if ((Monster->is_death || Monster->HP_current <= 0.0f) && Monster->CapsuleComponent) {
+                float CapsuleHalfHeight = Monster->CapsuleComponent->GetScaledCapsuleHalfHeight();
+                FVector Pos = Monster->K2_GetActorLocation();
+
+                // 胶囊体中心在腰部，所以 Z + HalfHeight 大概就是头顶
+                // 稍微减一点(比如 * 0.8) 也就是瞄眉毛的位置，防止射飞
+                Pos.Z += (CapsuleHalfHeight * 0.8f);
+                return Pos;
+            }
+
+
+            // 使用 see_Scene 组件
+            // SDK 显示偏移 0x04E0 有一个 see_Scene，通常用于AI视野检测，位于头部/眼睛
+            if ((Monster->is_death || Monster->HP_current <= 0.0f) && Monster->see_Scene)
+            {
+                return Monster->see_Scene->K2_GetComponentLocation();
+            }
+
+            // 简单的坐标偏移 (保底)
+            // FVector Pos = Monster->K2_GetActorLocation();
+            // Pos.Z += 130.0f; // 假设怪物头部高度
+            // return Pos;
         }
+        __except(EXCEPTION_EXECUTE_HANDLER)
+        {
+            return Monster->K2_GetActorLocation(); 
 
-
-
-
-
-        // 简单的坐标偏移 (保底)
-        // FVector Pos = Monster->K2_GetActorLocation();
-        // Pos.Z += 130.0f; // 假设怪物头部高度
-        // return Pos;
+        }
         return Monster->K2_GetActorLocation();
+        
     }
     FVector GetEnemyWaistPos(AActor* Actor) {
         if (!Actor)
             return { 0, 0, 0 };
         auto Monster = static_cast<AMG_AI_actor_master_C*>(Actor);
-        if (Monster->CapsuleComponent) {
+        if ((Monster->is_death || Monster->HP_current <= 0.0f) && Monster->CapsuleComponent) {
             float CapsuleHalfHeight = Monster->CapsuleComponent->GetScaledCapsuleHalfHeight();
             FVector Pos = Monster->K2_GetActorLocation();
-
+            Pos.Z += (CapsuleHalfHeight * 0.2f);
+            
             return Pos;
         }
 
