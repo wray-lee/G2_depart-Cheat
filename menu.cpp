@@ -132,6 +132,7 @@ namespace menu
     bool bEspPlayer = false;                         // 显示其他玩家
     bool bEspLT = false;                             // 显示掉落
     bool bEspFumo = false;                             // 显示fumo
+	bool bEspCamp = false;							 // 显示营地
 
     enum class EActorType
     {
@@ -139,12 +140,14 @@ namespace menu
         Player,
         Enemy,
         Chest,
-        Fumo
+        Fumo,
+        Camp
     };
     float col_Player[4] = {0.2f, 1.0f, 0.2f, 1.0f};  // 默认绿色
     float col_Monster[4] = {1.0f, 0.2f, 0.2f, 1.0f}; // 默认红色
     float col_Loot[4] = {1.0f, 1.0f, 0.0f, 1.0f};    // 默认黄色
 	float col_Fumo[4] = { 0.0f, 0.0f, 1.0f, 1.0f };	// 默认蓝色
+	float col_Camp[4] = { 0.6f, 0.4f, 0.7f, 1.0f }; // 默认紫色
 
     // Aimbot
     bool bAimbot = false;
@@ -230,6 +233,10 @@ namespace menu
         // 判断是否为fumo
         if (Actor->IsA(AQS_quest_check_actor_04_FUMO_C::StaticClass()))
             return EActorType::Fumo;
+
+		// 判断是否为营地
+        if (Actor->IsA(AAA_MAP_camp_00_main_A_C::StaticClass()))
+            return EActorType::Camp;
 
         return EActorType::Unknown;
     }
@@ -1026,8 +1033,25 @@ namespace menu
                 sprintf_s(Buf, "Fumo [%.0fm]", Distance);
 
 
-                // 黄色显示
+                // 蓝色显示
                 DrawText3D(PC, Pos, Buf, col_Fumo);
+                break;
+            }
+
+            case EActorType::Camp:
+            {
+                if (!bEspCamp)
+                    break;
+                auto fumo = static_cast<AAA_MAP_camp_00_main_A_C*>(Actor);
+                char Buf[64];
+                //sprintf_s(Buf, "Item [%.0fm]", Distance);
+
+                //std::string lName = UKismetSystemLibrary::GetClassDisplayName(LT->Class).ToString();
+                sprintf_s(Buf, "Camp [%.0fm]", Distance);
+
+
+                // 紫色显示
+                DrawText3D(PC, Pos, Buf, col_Camp);
                 break;
             }
 
@@ -1293,6 +1317,7 @@ namespace menu
                             bEspPlayer = true;
                             bEspMonster = true;
 							bEspFumo = true;
+							bEspCamp = true;
                         }
 
                         if (bEspEnable)
@@ -1316,9 +1341,14 @@ namespace menu
                             ImGui::ColorEdit4("##ColLoot", col_Loot, ImGuiColorEditFlags_NoInputs | ImGuiColorEditFlags_AlphaPreview);
 
 							// 4. Fumo ESP + 颜色选择
-                            ImGui::Checkbox("Show Fumo", &bEspFumo);
+                            ImGui::Checkbox("Show Camp", &bEspFumo);
                             ImGui::SameLine();
                             ImGui::ColorEdit4("##ColFumo", col_Fumo, ImGuiColorEditFlags_NoInputs | ImGuiColorEditFlags_AlphaPreview);
+
+							// 5. 营地 ESP + 颜色选择
+                            ImGui::Checkbox("Show Fumo", &bEspCamp);
+                            ImGui::SameLine();
+                            ImGui::ColorEdit4("##ColCamp", col_Camp, ImGuiColorEditFlags_NoInputs | ImGuiColorEditFlags_AlphaPreview);
 
                             ImGui::Unindent(); // 取消缩进
                         }
