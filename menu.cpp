@@ -87,10 +87,12 @@ namespace menu
     static bool noTitleBar = false;
 
     // 功能开关
+    bool bOneClick = false;
     bool bGodMode = false;
     bool bUStamina = false;
     bool bInfiniteAmmo = false;
     bool bInfiniteMoney = false;
+    bool bUnlimitedPoints = false;
     bool bNoRecoil = false;
 
     bool bAttackSpeed = false;
@@ -161,6 +163,7 @@ namespace menu
     bool bDebugScanner = false;
     float fDebugScanDist = 500.0f; // 默认扫描 5米 (UE单位通常是厘米，500 = 5m)
     bool bShowClassOnly = true;    // 只显示类名(看起来简洁点)
+    bool bDebugPing = false;
 
     bool SafeProjectWorldToScreen(APlayerController* PC, FVector WorldLoc, FVector2D* OutScreenPos);
     void DrawText3D(APlayerController* PC, const FVector& WorldPos, const char* Text, float* ColorFloat);
@@ -240,7 +243,7 @@ namespace menu
 
         return EActorType::Unknown;
     }
-	// 获取本地玩家控制器和角色
+	// 获取本地玩家控制器, 角色和存档
     APlayerController* GetPlayerController()
     {
         UWorld* World = UWorld::GetWorld();
@@ -263,6 +266,13 @@ namespace menu
 
         return nullptr;
     }
+
+    //Acharacter_main_menu_C* GetPlayerMainMenu()
+    //{
+    //    auto DefaultMenuChar = Acharacter_main_menu_C::GetDefaultObj();
+    //    if (!DefaultMenuChar) return nullptr;
+    //    return static_cast<Acharacter_main_menu_C*>(DefaultMenuChar);
+    //}
 
     void RunDebugScanner(APlayerController* PC, AActor* MyChar)
     {
@@ -705,6 +715,13 @@ namespace menu
             }
         }
 
+        if (bInstantSkill) 
+        {
+            MyChar->skill_on_CD = false;
+			MyChar->U_skill_on_CD = false;
+        }
+
+
         // [无后坐力/无限射程]
         if (bNoRecoil)
         {
@@ -765,6 +782,10 @@ namespace menu
             MyChar->shooting_delay_current = 0.0f;
             MyChar->CW_Fire_Delay = 0.0f;
             MyChar->CW_Burst_Delay = 0.0f;
+			MyChar->shooting_mode_auto_ = true;
+            MyChar->weapon_1_shoot_mode_auto_ = true;
+            MyChar->weapon_2_shoot_mode_auto_ = true;
+            MyChar->weapon_3_shoot_mode_auto_ = true;
         }
         else
         {
@@ -773,10 +794,18 @@ namespace menu
             float default_shooting_delay_current = MyChar->shooting_delay_current;
             float default_CW_Fire_Delay = MyChar->CW_Fire_Delay;
             float default_CW_Burst_Delay = MyChar->CW_Burst_Delay;
+            bool default_shooting_mode_auto_ = MyChar->shooting_mode_auto_;
+            bool default_weapon_1_shoot_mode_auto_ = MyChar->weapon_1_shoot_mode_auto_;
+            bool default_weapon_2_shoot_mode_auto_ = MyChar->weapon_2_shoot_mode_auto_;
+            bool default_weapon_3_shoot_mode_auto_ = MyChar->weapon_3_shoot_mode_auto_;
             MyChar->shooting_delay = default_shootint_delay;
             MyChar->shooting_delay_current = default_shooting_delay_current;
             MyChar->CW_Fire_Delay = default_CW_Fire_Delay;
             MyChar->CW_Burst_Delay = default_CW_Burst_Delay;
+			MyChar->shooting_mode_auto_ = default_shooting_mode_auto_;
+            MyChar->weapon_1_shoot_mode_auto_ = default_weapon_1_shoot_mode_auto_;
+            MyChar->weapon_2_shoot_mode_auto_ = default_weapon_2_shoot_mode_auto_;
+            MyChar->weapon_3_shoot_mode_auto_ = default_weapon_3_shoot_mode_auto_;
         }
 
         // ==============================================================
@@ -833,6 +862,12 @@ namespace menu
         {
             // [可选] 关闭功能时还原物价 (防止负面影响)
             // 这里为了简单不写还原逻辑，建议开启后不要关闭，或者重启游戏还原
+        }
+
+        if (bUnlimitedPoints)
+        {
+            MyChar->Point_skill_current = 2147480000;
+            MyChar->point_state_current = 2147480000;
         }
 
         if (bSpeedHack)
@@ -966,8 +1001,9 @@ namespace menu
                 auto Player = static_cast<APlayer_char_main_C *>(Actor);
                 // if (Player->Is_death_ || Player->Is_down_) break; // 死了不画
                 std::string PlayerName = Player->PlayerState->PlayerNamePrivate.ToString();
+                uint8 PlayerPing = Player->PlayerState->Ping;
                 char Buf[64];
-                sprintf_s(Buf, "Player-%s [%.0fm]\nHP: %d",PlayerName, Distance, (int)Player->HP_current);
+                sprintf_s(Buf, "Player-%s-%d [%.0fm]\nHP: %d",PlayerName, PlayerPing, Distance, (int)Player->HP_current);
 
                 // 绿色显示
                 DrawText3D(PC, Pos + FVector(0, 0, 100), Buf, col_Player);
@@ -1237,6 +1273,7 @@ namespace menu
     }
 
 
+
    
 
     void Init()
@@ -1288,6 +1325,42 @@ namespace menu
                 {
                     if (ImGui::CollapsingHeader("Player Features", ImGuiTreeNodeFlags_DefaultOpen))
                     {
+                        if (ImGui::Checkbox(("One Click"), &bOneClick))
+                        // 一键开启
+                        if (bOneClick)
+                        {
+                            bGodMode = true;
+                            bUStamina = true;
+                            bInfiniteAmmo = true;
+                            bNoRecoil = true;
+                            bAttackSpeed = true;
+                            bInstantSkill = true;
+                            bShootRange = true;
+                            bEspEnable = true;
+                            bSpeedHack = true;
+                            bMultipleJumpTimes = true;
+                            bEspPlayer = true;
+                            bEspMonster = true;
+                            bEspFumo = true;
+                            bEspCamp = true;
+                        }
+                        else
+                        {
+                            bGodMode = false;
+                            bUStamina = false;
+                            bInfiniteAmmo = false;
+                            bNoRecoil = false;
+                            bAttackSpeed = false;
+                            bInstantSkill = false;
+                            bShootRange = false;
+                            bEspEnable = false;
+                            bSpeedHack = false;
+                            bMultipleJumpTimes = false;
+                            bEspPlayer = false;
+                            bEspMonster = false;
+                            bEspFumo = false;
+                            bEspCamp = false;
+                        }
                         ImGui::Checkbox("God Mode", &bGodMode);
                         ImGui::Checkbox("Unlimited Stamina", &bUStamina);
                         ImGui::Checkbox("Infinite Ammo", &bInfiniteAmmo);
@@ -1298,6 +1371,7 @@ namespace menu
                         ImGui::Spacing();
                         // ImGui::Checkbox("Noclip", &bNoclip);
                         ImGui::Checkbox("EXP Rate Hack", &bExpRate);
+                        ImGui::Checkbox("Unlimited Points", &bUnlimitedPoints);
                         if (bExpRate)
                             ImGui::SliderFloat("MultiplierExp", &fExpRateMultiplier, 1.0f, 10.0f, "%.1fx");
                         ImGui::Checkbox("High Jump ", &bHighJump);
@@ -1460,6 +1534,14 @@ namespace menu
                             ImGui::TextDisabled("Walk close to an object to see its Class Name.");
                             ImGui::TextDisabled("Use this Class Name in your code to filter ESP/Aimbot.");
                         
+                        }
+                        ImGui::Checkbox("Debug Ping", &bDebugPing);
+                        if (bDebugPing) 
+                        {
+                            auto MyChar = GetLocalPlayerChar();
+                            uint8 PlayerPing = MyChar->PlayerState->Ping;
+                            char MyCharPingText[32];
+							sprintf_s(MyCharPingText, "Ping: %d ms", PlayerPing);
                         }
                     }
                     ImGui::EndTabItem();
