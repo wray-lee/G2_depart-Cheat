@@ -1282,7 +1282,7 @@ namespace menu
                         ImGui::Checkbox("Unlimited Jump Times", &bMultipleJumpTimes);
                         ImGui::Checkbox("Speed Hack", &bSpeedHack);
                         if (bSpeedHack)
-                            ImGui::SliderFloat("MultiplierSpeed", &fMoveSpeedMultiplier, 1.0f, 3.0f, "%.1fx");
+                            ImGui::SliderFloat("MultiplierSpeed", &fMoveSpeedMultiplier, 1.0f, 10.0f, "%.1fx");
                     }
                     // --- [ESP Visuals] --- (新增部分)
                     if (ImGui::CollapsingHeader("ESP Visuals", ImGuiTreeNodeFlags_DefaultOpen))
