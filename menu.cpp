@@ -131,17 +131,20 @@ namespace menu
     bool bEspMonster = false;                        // 显示怪物
     bool bEspPlayer = false;                         // 显示其他玩家
     bool bEspLT = false;                             // 显示掉落
+    bool bEspFumo = false;                             // 显示fumo
 
     enum class EActorType
     {
         Unknown = 0,
         Player,
         Enemy,
-        Chest
+        Chest,
+        Fumo
     };
     float col_Player[4] = {0.2f, 1.0f, 0.2f, 1.0f};  // 默认绿色
     float col_Monster[4] = {1.0f, 0.2f, 0.2f, 1.0f}; // 默认红色
     float col_Loot[4] = {1.0f, 1.0f, 0.0f, 1.0f};    // 默认黄色
+	float col_Fumo[4] = { 0.0f, 0.0f, 1.0f, 1.0f };	// 默认蓝色
 
     // Aimbot
     bool bAimbot = false;
@@ -223,6 +226,10 @@ namespace menu
         // 判断是否为掉落物
         if (Actor->IsA(ALT_loot_box_main_C::StaticClass()))
             return EActorType::Chest;
+        
+        // 判断是否为fumo
+        if (Actor->IsA(AQS_quest_check_actor_04_FUMO_C::StaticClass()))
+            return EActorType::Fumo;
 
         return EActorType::Unknown;
     }
@@ -1001,6 +1008,22 @@ namespace menu
                 DrawText3D(PC, Pos, Buf, col_Loot);
                 break;
             }
+            case EActorType::Fumo:
+            {
+                if (!bEspFumo)
+                    break; 
+                auto fumo = static_cast<AQS_quest_check_actor_04_FUMO_C*>(Actor);
+                char Buf[64];
+                //sprintf_s(Buf, "Item [%.0fm]", Distance);
+
+                //std::string lName = UKismetSystemLibrary::GetClassDisplayName(LT->Class).ToString();
+                sprintf_s(Buf, "Fumo [%.0fm]", Distance);
+
+
+                // 黄色显示
+                DrawText3D(PC, Pos, Buf, col_Fumo);
+                break;
+            }
 
             case EActorType::Unknown:
             default:
@@ -1285,6 +1308,11 @@ namespace menu
                             ImGui::Checkbox("Show Loot/Box", &bEspLT);
                             ImGui::SameLine();
                             ImGui::ColorEdit4("##ColLoot", col_Loot, ImGuiColorEditFlags_NoInputs | ImGuiColorEditFlags_AlphaPreview);
+
+							// 4. Fumo ESP + 颜色选择
+                            ImGui::Checkbox("Show Fumo", &bEspFumo);
+                            ImGui::SameLine();
+                            ImGui::ColorEdit4("##ColLoot", col_Fumo, ImGuiColorEditFlags_NoInputs | ImGuiColorEditFlags_AlphaPreview);
 
                             ImGui::Unindent(); // 取消缩进
                         }
