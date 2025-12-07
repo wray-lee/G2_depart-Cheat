@@ -1651,61 +1651,61 @@ namespace menu
                             char MyCharPingText[32];
 							sprintf_s(MyCharPingText, "Ping: %d ms", PlayerPing);
                         }
-                        if (ImGui::Button("Suicide / Test TP"))
-                        {
-                            auto MyChar = GetLocalPlayerChar();
-                            UWorld* World = UWorld::GetWorld();
+                        //if (ImGui::Button("Suicide / Test TP"))
+                        //{
+                        //    auto MyChar = GetLocalPlayerChar();
+                        //    UWorld* World = UWorld::GetWorld();
 
-                            if (MyChar && World && World->PersistentLevel)
-                            {
-                                // 1. 先执行自杀逻辑 (如果你确实想死)
-                                MyChar->HP_current = 0.0f;
-                                MyChar->Is_down_ = true;
-                                // 如果游戏有专门的死亡函数，建议调用那个，例如：
-                                // MyChar->Server_Suicide(); 或 ApplyDamage(...)
+                        //    if (MyChar && World && World->PersistentLevel)
+                        //    {
+                        //        // 1. 先执行自杀逻辑 (如果你确实想死)
+                        //        MyChar->HP_current = 0.0f;
+                        //        MyChar->Is_down_ = true;
+                        //        // 如果游戏有专门的死亡函数，建议调用那个，例如：
+                        //        // MyChar->Server_Suicide(); 或 ApplyDamage(...)
 
-                                // 2. 寻找场景中的传送控制 Actor (AAA_switch_map_zoon_location_139_C)
-                                AAA_switch_map_zoon_location_139_C* TargetTPActor = nullptr;
+                        //        // 2. 寻找场景中的传送控制 Actor (AAA_switch_map_zoon_location_139_C)
+                        //        AAA_switch_map_zoon_location_139_C* TargetTPActor = nullptr;
 
-                                TArray<AActor*> Actors = World->PersistentLevel->Actors;
-                                for (int i = 0; i < Actors.Num(); i++)
-                                {
-                                    AActor* Act = Actors[i];
-                                    if (Act && Act->IsA(AAA_switch_map_zoon_location_139_C::StaticClass()))
-                                    {
-                                        // 找到了实例
-                                        TargetTPActor = static_cast<AAA_switch_map_zoon_location_139_C*>(Act);
-                                        break;
-                                    }
-                                }
+                        //        TArray<AActor*> Actors = World->PersistentLevel->Actors;
+                        //        for (int i = 0; i < Actors.Num(); i++)
+                        //        {
+                        //            AActor* Act = Actors[i];
+                        //            if (Act && Act->IsA(AAA_switch_map_zoon_location_139_C::StaticClass()))
+                        //            {
+                        //                // 找到了实例
+                        //                TargetTPActor = static_cast<AAA_switch_map_zoon_location_139_C*>(Act);
+                        //                break;
+                        //            }
+                        //        }
 
-                                // 3. 如果找到了 Actor，执行传送
-                                if (TargetTPActor)
-                                {
-                                    // 注意：请检查你的 SDK 中变量名是 TP_point_139_010 还是 001
-                                    // 之前你说是 TArray，所以我们要检查是否有数据
-                                    if (TargetTPActor->TP_point_139_010.Num() > 0)
-                                    {
-                                        // 取第一个点作为目标
-                                        FVector NewLoc = TargetTPActor->TP_point_139_010[0];
-                                        float NewRot = TargetTPActor->TP_rotation_139_010;
+                        //        // 3. 如果找到了 Actor，执行传送
+                        //        if (TargetTPActor)
+                        //        {
+                        //            // 注意：请检查你的 SDK 中变量名是 TP_point_139_010 还是 001
+                        //            // 之前你说是 TArray，所以我们要检查是否有数据
+                        //            if (TargetTPActor->TP_point_139_010.Num() > 0)
+                        //            {
+                        //                // 取第一个点作为目标
+                        //                FVector NewLoc = TargetTPActor->TP_point_139_010[0];
+                        //                float NewRot = TargetTPActor->TP_rotation_139_010;
 
-                                        // 调用传送函数
-                                        // 这里的 TargetTPActor 是场景里的实例，调用它是安全的
-                                        TargetTPActor->MC_BB_player_TP(MyChar, NewLoc, NewRot);
-                                    }
-                                    else
-                                    {
-                                        // 如果数组为空，或者变量名是 TP_point_139_001 (非数组)，请用下面的写法：
-                                        /*
-                                        FVector NewLoc = TargetTPActor->TP_point_139_001;
-                                        float NewRot = TargetTPActor->TP_rotation_139_001;
-                                        TargetTPActor->MC_BB_player_TP(MyChar, NewLoc, NewRot);
-                                        */
-                                    }
-                                }
-                            }
-                        }
+                        //                // 调用传送函数
+                        //                // 这里的 TargetTPActor 是场景里的实例，调用它是安全的
+                        //                TargetTPActor->MC_BB_player_TP(MyChar, NewLoc, NewRot);
+                        //            }
+                        //            else
+                        //            {
+                        //                // 如果数组为空，或者变量名是 TP_point_139_001 (非数组)，请用下面的写法：
+                        //                /*
+                        //                FVector NewLoc = TargetTPActor->TP_point_139_001;
+                        //                float NewRot = TargetTPActor->TP_rotation_139_001;
+                        //                TargetTPActor->MC_BB_player_TP(MyChar, NewLoc, NewRot);
+                        //                */
+                        //            }
+                        //        }
+                        //    }
+                        //}
                     }
                     ImGui::EndTabItem();
                 }
