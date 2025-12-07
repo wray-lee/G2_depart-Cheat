@@ -130,6 +130,7 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="CppSDK\SDK\AA_switch_map_zoon_location_139_functions.cpp" />
     <ClCompile Include="CppSDK\SDK\Basic.cpp" />
     <ClCompile Include="CppSDK\SDK\CoreUObject_functions.cpp" />
     <ClCompile Include="CppSDK\SDK\Engine_functions.cpp" />

@@ -119,6 +119,8 @@ namespace menu
 
 
     bool bNoclip = false;
+    bool bFly = false;
+
     bool bInstantSkill = false;
     bool bExpRate = false;
 
@@ -945,6 +947,108 @@ namespace menu
             }
         }
 
+        // 静态变量用于记录上一帧的状态，确保只在切换时修改内存，避免每帧写入
+        static bool bLastNoclip = false;
+        static bool bLastFly = false;
+
+        // 只要开启了穿墙(Noclip)或者飞行(Fly)，都必须进入飞行移动模式
+        bool bIsFlyingActive = bNoclip || bFly;
+
+        // 【关键】碰撞掩码。通常是 1，如果你的旧代码 2 有效，请改为 0x02
+        const uint8 COLLISION_MASK = 1;
+
+        if (bIsFlyingActive)
+        {
+            // 1. 确保角色处于飞行移动模式 (防止掉入虚空)
+            if (MyChar->CharacterMovement && MyChar->CharacterMovement->MovementMode != EMovementMode::MOVE_Flying)
+            {
+                MyChar->CharacterMovement->MovementMode = EMovementMode::MOVE_Flying;
+            }
+
+            // 2. Noclip 特有逻辑：处理碰撞位域
+            if (bNoclip)
+            {
+                if (!bLastNoclip)
+                {
+                    // [关闭碰撞]：保留其他位，只把碰撞位(Mask)置为0
+                    // 逻辑：Current & (~00000001) -> Current & 11111110
+                    MyChar->bActorEnableCollision &= ~COLLISION_MASK;
+
+                    bLastNoclip = true;
+                }
+            }
+            else
+            {
+                // 如果开启了 Fly 但没开 Noclip (例如只飞不穿墙)，需要确保碰撞是开启的
+                // 这里检查 bLastNoclip 是为了防止重复写入
+                if (bLastNoclip)
+                {
+                    MyChar->bActorEnableCollision |= COLLISION_MASK;
+                    bLastNoclip = false;
+                }
+            }
+
+            // 3. 通用的飞行移动控制 (W/A/S/D/Space/Ctrl)
+            if (MyChar->CharacterMovement)
+            {
+                FRotator CamRot = MyController->GetControlRotation();
+                FVector FlyDirection = { 0.f, 0.f, 0.f };
+                float currentFlySpeed = 3000.0f; // 基础飞行速度
+
+                if (GetAsyncKeyState(VK_SHIFT) & 0x8000) currentFlySpeed *= 2.5f;
+
+                FVector Fwd = Math::GetCameraForward(CamRot);
+                FVector Rgt = Math::GetCameraRight(CamRot);
+
+                if (GetAsyncKeyState('W') & 0x8000) FlyDirection += Fwd;
+                if (GetAsyncKeyState('S') & 0x8000) FlyDirection -= Fwd;
+                if (GetAsyncKeyState('D') & 0x8000) FlyDirection += Rgt;
+                if (GetAsyncKeyState('A') & 0x8000) FlyDirection -= Rgt;
+                if (GetAsyncKeyState(VK_SPACE) & 0x8000) FlyDirection.Z += 1.0f;
+                if (GetAsyncKeyState(VK_LCONTROL) & 0x8000) FlyDirection.Z -= 1.0f;
+
+                if (!FlyDirection.IsZero())
+                {
+                    // 手动归一化向量 (避免对角线移动过快)
+                    float Len = sqrt(FlyDirection.X * FlyDirection.X + FlyDirection.Y * FlyDirection.Y + FlyDirection.Z * FlyDirection.Z);
+                    FlyDirection = FlyDirection / Len;
+
+                    MyChar->CharacterMovement->Velocity = FlyDirection * currentFlySpeed;
+                }
+                else
+                {
+                    // 松开按键时悬停 (速度归零)
+                    MyChar->CharacterMovement->Velocity = { 0.f, 0.f, 0.f };
+                }
+            }
+
+            bLastFly = true;
+        }
+        else
+        {
+            // [还原逻辑]：当所有飞行功能都关闭时，执行一次清理
+            if (bLastFly || bLastNoclip)
+            {
+                // 1. 恢复物理模拟 (掉落)
+                if (MyChar->CharacterMovement)
+                {
+                    MyChar->CharacterMovement->MovementMode = EMovementMode::MOVE_Falling;
+                    MyChar->CharacterMovement->Velocity = { 0.f, 0.f, 0.f };
+                }
+
+                // 2. [开启碰撞]：使用位或运算
+                // 逻辑：Current | 00000001 -> 确保最后一位是1
+                MyChar->bActorEnableCollision |= COLLISION_MASK;
+
+                // 重置状态位
+                bLastNoclip = false;
+                bLastFly = false;
+            }
+        }
+
+
+
+
         if (bExpRate)
         {
             auto DefaultChar = APlayer_char_main_C::GetDefaultObj();
@@ -1369,11 +1473,8 @@ namespace menu
                         ImGui::Checkbox("Unlimited Range", &bShootRange);
                         ImGui::Checkbox("Instant Skill", &bInstantSkill);
                         ImGui::Spacing();
-                        // ImGui::Checkbox("Noclip", &bNoclip);
-                        ImGui::Checkbox("EXP Rate Hack", &bExpRate);
-                        ImGui::Checkbox("Unlimited Points", &bUnlimitedPoints);
-                        if (bExpRate)
-                            ImGui::SliderFloat("MultiplierExp", &fExpRateMultiplier, 1.0f, 10.0f, "%.1fx");
+                        ImGui::Checkbox("Noclip", &bNoclip);
+                        ImGui::Checkbox("Fly", &bFly);
                         ImGui::Checkbox("High Jump ", &bHighJump);
                         if (bHighJump)
                             ImGui::SliderFloat("MultiplierJump", &fJumpMultiplier, 1.0f, 10.0f, "%.1fx");
@@ -1381,6 +1482,13 @@ namespace menu
                         ImGui::Checkbox("Speed Hack", &bSpeedHack);
                         if (bSpeedHack)
                             ImGui::SliderFloat("MultiplierSpeed", &fMoveSpeedMultiplier, 1.0f, 3.0f, "%.1fx");
+
+                        ImGui::Spacing();
+                        ImGui::Checkbox("Unlimited Points", &bUnlimitedPoints);
+                        ImGui::Checkbox("EXP Rate Hack", &bExpRate);
+                        if (bExpRate)
+                            ImGui::SliderFloat("MultiplierExp", &fExpRateMultiplier, 1.0f, 10.0f, "%.1fx");
+						
                     }
                     // --- [ESP Visuals] --- (新增部分)
                     if (ImGui::CollapsingHeader("ESP Visuals", ImGuiTreeNodeFlags_DefaultOpen))
@@ -1542,6 +1650,61 @@ namespace menu
                             uint8 PlayerPing = MyChar->PlayerState->Ping;
                             char MyCharPingText[32];
 							sprintf_s(MyCharPingText, "Ping: %d ms", PlayerPing);
+                        }
+                        if (ImGui::Button("Suicide / Test TP"))
+                        {
+                            auto MyChar = GetLocalPlayerChar();
+                            UWorld* World = UWorld::GetWorld();
+
+                            if (MyChar && World && World->PersistentLevel)
+                            {
+                                // 1. 先执行自杀逻辑 (如果你确实想死)
+                                MyChar->HP_current = 0.0f;
+                                MyChar->Is_down_ = true;
+                                // 如果游戏有专门的死亡函数，建议调用那个，例如：
+                                // MyChar->Server_Suicide(); 或 ApplyDamage(...)
+
+                                // 2. 寻找场景中的传送控制 Actor (AAA_switch_map_zoon_location_139_C)
+                                AAA_switch_map_zoon_location_139_C* TargetTPActor = nullptr;
+
+                                TArray<AActor*> Actors = World->PersistentLevel->Actors;
+                                for (int i = 0; i < Actors.Num(); i++)
+                                {
+                                    AActor* Act = Actors[i];
+                                    if (Act && Act->IsA(AAA_switch_map_zoon_location_139_C::StaticClass()))
+                                    {
+                                        // 找到了实例
+                                        TargetTPActor = static_cast<AAA_switch_map_zoon_location_139_C*>(Act);
+                                        break;
+                                    }
+                                }
+
+                                // 3. 如果找到了 Actor，执行传送
+                                if (TargetTPActor)
+                                {
+                                    // 注意：请检查你的 SDK 中变量名是 TP_point_139_010 还是 001
+                                    // 之前你说是 TArray，所以我们要检查是否有数据
+                                    if (TargetTPActor->TP_point_139_010.Num() > 0)
+                                    {
+                                        // 取第一个点作为目标
+                                        FVector NewLoc = TargetTPActor->TP_point_139_010[0];
+                                        float NewRot = TargetTPActor->TP_rotation_139_010;
+
+                                        // 调用传送函数
+                                        // 这里的 TargetTPActor 是场景里的实例，调用它是安全的
+                                        TargetTPActor->MC_BB_player_TP(MyChar, NewLoc, NewRot);
+                                    }
+                                    else
+                                    {
+                                        // 如果数组为空，或者变量名是 TP_point_139_001 (非数组)，请用下面的写法：
+                                        /*
+                                        FVector NewLoc = TargetTPActor->TP_point_139_001;
+                                        float NewRot = TargetTPActor->TP_rotation_139_001;
+                                        TargetTPActor->MC_BB_player_TP(MyChar, NewLoc, NewRot);
+                                        */
+                                    }
+                                }
+                            }
                         }
                     }
                     ImGui::EndTabItem();

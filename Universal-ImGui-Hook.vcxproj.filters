@@ -99,6 +99,9 @@
     <ClCompile Include="CppSDK\SDK\MG_AI_actor_master_functions.cpp">
       <Filter>Sources Files</Filter>
     </ClCompile>
+    <ClCompile Include="CppSDK\SDK\AA_switch_map_zoon_location_139_functions.cpp">
+      <Filter>Sources Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="imgui\imconfig.h">
